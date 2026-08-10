@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
+    "envalid": "^8.2.0",
     "pino": "^10.3.1",
     "yahoo-finance2": "^4.0.2"
   }

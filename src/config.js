@@ -1,3 +1,5 @@
+import { cleanEnv, EnvError, EnvMissingError, makeValidator, str } from 'envalid';
+
 /**
  * Typed, validated view over the process environment.
  *
@@ -7,117 +9,122 @@
  * first run, not on the third.
  */
 export class Config {
-  #values;
+  #env;
 
   constructor(env = process.env) {
-    this.#values = this.#parse(env);
+    this.#env = this.#parse(env);
   }
 
   #parse(env) {
-    const issues = [];
-
-    const values = {
-      symbol: (this.#read(env, 'SYMBOL') ?? 'TQQQ').toUpperCase(),
-      dropThresholdPercent: this.#number(env, 'DROP_THRESHOLD_PERCENT', issues, {
-        fallback: 25,
-        min: 0.01,
-        max: 100,
-      }),
-      lookbackMonths: this.#number(env, 'LOOKBACK_MONTHS', issues, {
-        fallback: 6,
-        min: 1,
-        max: 600,
-        integer: true,
-      }),
-      botToken: this.#botToken(env, issues),
-      chatId: this.#required(env, 'TELEGRAM_CHAT_ID', issues),
-      forceNotify: this.#boolean(env, 'FORCE_NOTIFY', issues),
-    };
-
-    if (issues.length > 0) {
-      throw new Error(
-        [
-          'Invalid configuration:',
-          ...issues.map((issue) => `  - ${issue}`),
-          '',
-          'Only TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.',
-          'SYMBOL, DROP_THRESHOLD_PERCENT and LOOKBACK_MONTHS default to TQQQ, 25 and 6.',
-        ].join('\n'),
-      );
-    }
-    return values;
+    return cleanEnv(
+      this.#withoutBlanks(env),
+      {
+        SYMBOL: this.#ticker({ default: 'TQQQ' }),
+        DROP_THRESHOLD_PERCENT: this.#percentage({ default: 25 }),
+        LOOKBACK_MONTHS: this.#months({ default: 6 }),
+        TELEGRAM_BOT_TOKEN: this.#botToken(),
+        TELEGRAM_CHAT_ID: str(),
+        FORCE_NOTIFY: this.#flag({ default: false }),
+      },
+      { reporter: ({ errors }) => this.#report(errors) },
+    );
   }
 
-  /** Empty variables count as unset, so a blank value falls back to the default. */
-  #read(env, key) {
-    const raw = env[key];
-    return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined;
+  /**
+   * envalid only treats a variable as missing when it is literally undefined, so
+   * `SYMBOL=` would otherwise parse as an empty ticker rather than falling back
+   * to the default. Blank means unset here.
+   */
+  #withoutBlanks(env) {
+    return Object.fromEntries(
+      Object.entries(env).filter(([, value]) => typeof value === 'string' && value.trim() !== ''),
+    );
   }
 
-  #required(env, key, issues) {
-    const value = this.#read(env, key);
-    if (value === undefined) issues.push(`${key} is required`);
-    return value;
+  #ticker(spec) {
+    return makeValidator((input) => input.trim().toUpperCase())(spec);
   }
 
-  #number(env, key, issues, { fallback, min, max, integer = false }) {
-    const raw = this.#read(env, key);
-    if (raw === undefined) return fallback;
-
-    const value = Number(raw);
-    if (!Number.isFinite(value)) {
-      issues.push(`${key} must be a number (got "${raw}")`);
-    } else if (integer && !Number.isInteger(value)) {
-      issues.push(`${key} must be a whole number (got "${raw}")`);
-    } else if (value < min || value > max) {
-      issues.push(`${key} must be between ${min} and ${max} (got ${value})`);
-    } else {
+  #percentage(spec) {
+    return makeValidator((input) => {
+      const value = Number(input);
+      if (!Number.isFinite(value)) throw new EnvError(`must be a number (got "${input}")`);
+      if (value <= 0 || value > 100) throw new EnvError(`must be between 0.01 and 100 (got ${value})`);
       return value;
-    }
-    return fallback;
+    })(spec);
   }
 
-  #boolean(env, key, issues) {
-    const raw = this.#read(env, key);
-    if (raw === undefined) return false;
-
-    const normalised = raw.toLowerCase();
-    if (['1', 'true', 'yes', 'y', 'on'].includes(normalised)) return true;
-    if (['0', 'false', 'no', 'n', 'off'].includes(normalised)) return false;
-
-    issues.push(`${key} must be true or false (got "${raw}")`);
-    return false;
+  #months(spec) {
+    return makeValidator((input) => {
+      const value = Number(input);
+      if (!Number.isInteger(value)) throw new EnvError(`must be a whole number (got "${input}")`);
+      if (value < 1 || value > 600) throw new EnvError(`must be between 1 and 600 (got ${value})`);
+      return value;
+    })(spec);
   }
 
-  #botToken(env, issues) {
-    const value = this.#required(env, 'TELEGRAM_BOT_TOKEN', issues);
-    if (value !== undefined && !/^\d+:\S+$/.test(value)) {
+  /** envalid's own bool() phrases its error differently to the rest of these. */
+  #flag(spec) {
+    return makeValidator((input) => {
+      const normalised = input.trim().toLowerCase();
+      if (['1', 'true', 'yes', 'y', 'on'].includes(normalised)) return true;
+      if (['0', 'false', 'no', 'n', 'off'].includes(normalised)) return false;
+      throw new EnvError(`must be true or false (got "${input}")`);
+    })(spec);
+  }
+
+  #botToken(spec) {
+    return makeValidator((input) => {
       // Catches the easy mistake of pasting the bot's numeric id instead of the
       // whole token, which would otherwise only show up as a 404 from Telegram.
-      issues.push('TELEGRAM_BOT_TOKEN should look like "123456789:AAExample-Token"');
-    }
-    return value;
+      if (!/^\d+:\S+$/.test(input)) {
+        throw new EnvError('should look like "123456789:AAExample-Token"');
+      }
+      return input;
+    })(spec);
+  }
+
+  /**
+   * Replaces envalid's reporter, which logs to console and exits by itself.
+   * It is called on every run, including clean ones — hence the early return.
+   */
+  #report(errors) {
+    if (Object.keys(errors).length === 0) return;
+
+    const issues = Object.entries(errors).map(([key, error]) =>
+      error instanceof EnvMissingError ? `${key} is required` : `${key} ${error.message}`,
+    );
+
+    throw new Error(
+      [
+        'Invalid configuration:',
+        ...issues.map((issue) => `  - ${issue}`),
+        '',
+        'Only TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.',
+        'SYMBOL, DROP_THRESHOLD_PERCENT and LOOKBACK_MONTHS default to TQQQ, 25 and 6.',
+      ].join('\n'),
+    );
   }
 
   get symbol() {
-    return this.#values.symbol;
+    return this.#env.SYMBOL;
   }
 
   get dropThresholdPercent() {
-    return this.#values.dropThresholdPercent;
+    return this.#env.DROP_THRESHOLD_PERCENT;
   }
 
   get lookbackMonths() {
-    return this.#values.lookbackMonths;
+    return this.#env.LOOKBACK_MONTHS;
   }
 
   get telegram() {
-    return { botToken: this.#values.botToken, chatId: this.#values.chatId };
+    return { botToken: this.#env.TELEGRAM_BOT_TOKEN, chatId: this.#env.TELEGRAM_CHAT_ID };
   }
 
   /** Send the message even when the threshold was not reached, to test delivery. */
   get forceNotify() {
-    return this.#values.forceNotify;
+    return this.#env.FORCE_NOTIFY;
   }
 
   /** Secret-free snapshot, safe to write to the logs on boot. */
@@ -126,7 +133,7 @@ export class Config {
       symbol: this.symbol,
       dropThresholdPercent: this.dropThresholdPercent,
       lookbackMonths: this.lookbackMonths,
-      chatId: this.#values.chatId,
+      chatId: this.#env.TELEGRAM_CHAT_ID,
       forceNotify: this.forceNotify,
     };
   }
