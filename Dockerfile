@@ -1,6 +1,6 @@
 ###############################################################################
-# 1. deps — resolve production dependencies, then strip them down.
-#    Nothing from this stage survives except the pruned node_modules tree.
+# 1. deps — install production dependencies. Nothing from this stage survives
+#    except the node_modules tree itself.
 ###############################################################################
 FROM node:24-alpine AS deps
 
@@ -8,10 +8,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
+# Fail the build here rather than in production: every module resolves, the
+# config validates, the drawdown maths are right. Runs offline.
 COPY scripts ./scripts
-RUN node scripts/prune-modules.mjs
-
-# Fail the build here, not in production, if the prune went too far.
 COPY src ./src
 RUN node scripts/smoke-test.mjs
 
