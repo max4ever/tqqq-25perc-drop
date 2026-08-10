@@ -8,21 +8,18 @@ export class DropWatcher {
   #priceHistory;
   #analyzer;
   #notifier;
-  #stateStore;
   #logger;
 
-  constructor({ symbol, lookbackMonths, priceHistory, analyzer, notifier, stateStore, logger }) {
+  constructor({ symbol, lookbackMonths, priceHistory, analyzer, notifier, logger }) {
     this.#symbol = symbol;
     this.#lookbackMonths = lookbackMonths;
     this.#priceHistory = priceHistory;
     this.#analyzer = analyzer;
     this.#notifier = notifier;
-    this.#stateStore = stateStore;
     this.#logger = logger.child({ component: 'watcher' });
   }
 
   async check() {
-    const startedAt = new Date();
     this.#logger.info({ lookbackMonths: this.#lookbackMonths }, 'starting check');
 
     const window = await this.#priceHistory.fetchWindow(this.#symbol, this.#lookbackMonths);
@@ -43,35 +40,9 @@ export class DropWatcher {
         : `${analysis.symbol} is ${analysis.dropPercent}% below its ${this.#lookbackMonths}-month high — below threshold`,
     );
 
-    const outcome = { ...analysis, checkedAt: startedAt, notified: false, suppressed: false };
+    if (analysis.triggered) await this.#notifier.send(this.#buildMessage(analysis));
 
-    if (!analysis.triggered) return outcome;
-
-    const cooldownKey = this.#cooldownKey(analysis);
-    const { suppressed, lastAlertAt, nextAllowedAt } = await this.#stateStore.isSuppressed(cooldownKey);
-
-    if (suppressed) {
-      this.#logger.info({ lastAlertAt, nextAllowedAt }, 'threshold reached but still within cooldown — not notifying');
-      return { ...outcome, suppressed: true, lastAlertAt, nextAllowedAt };
-    }
-
-    const message = this.#buildMessage(analysis);
-    const result = await this.#notifier.send(message);
-
-    if (result.delivered) {
-      await this.#stateStore.recordAlert(cooldownKey, {
-        dropPercent: analysis.dropPercent,
-        peakPrice: analysis.peakPrice,
-        currentPrice: analysis.currentPrice,
-      });
-    }
-
-    return { ...outcome, notified: result.delivered, dryRun: result.dryRun === true, message };
-  }
-
-  /** Threshold and window are part of the key so config changes start a fresh cooldown. */
-  #cooldownKey(analysis) {
-    return `${this.#symbol}:${this.#lookbackMonths}m:${analysis.thresholdPercent}pct`;
+    return analysis;
   }
 
   #buildMessage(analysis) {

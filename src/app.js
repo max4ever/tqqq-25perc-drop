@@ -1,6 +1,5 @@
 import YahooFinance from 'yahoo-finance2';
 
-import { AlertStateStore } from './alert-state-store.js';
 import { DrawdownAnalyzer } from './drawdown-analyzer.js';
 import { DropWatcher } from './drop-watcher.js';
 import { PriceHistoryProvider } from './price-history-provider.js';
@@ -8,7 +7,7 @@ import { TelegramNotifier } from './telegram-notifier.js';
 
 /**
  * Composition root. Builds the object graph, runs exactly one check, and
- * returns — the schedule lives outside the container.
+ * returns — the container holds no state and the schedule lives outside it.
  */
 export class App {
   #config;
@@ -24,13 +23,12 @@ export class App {
   async run() {
     this.#logger.info({ config: this.#config.describe() }, 'starting stock-drop-alert');
     const result = await this.#watcher.check();
-    this.#logger.info({ triggered: result.triggered, notified: result.notified }, 'check complete');
+    this.#logger.info({ triggered: result.triggered }, 'check complete');
     return result;
   }
 
   #buildWatcher() {
     const config = this.#config;
-    const telegram = config.telegram;
 
     return new DropWatcher({
       symbol: config.symbol,
@@ -40,20 +38,7 @@ export class App {
         logger: this.#logger,
       }),
       analyzer: new DrawdownAnalyzer({ thresholdPercent: config.dropThresholdPercent }),
-      notifier: new TelegramNotifier({
-        url: telegram.url,
-        method: telegram.method,
-        messageParam: telegram.messageParam,
-        timeoutMs: telegram.timeoutMs,
-        retries: telegram.retries,
-        dryRun: config.dryRun,
-        logger: this.#logger,
-      }),
-      stateStore: new AlertStateStore({
-        filePath: config.stateFile,
-        cooldownHours: config.alertCooldownHours,
-        logger: this.#logger,
-      }),
+      notifier: new TelegramNotifier({ ...config.telegram, logger: this.#logger }),
       logger: this.#logger,
     });
   }

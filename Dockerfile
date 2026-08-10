@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 ###############################################################################
 # 1. deps — resolve production dependencies, then strip them down.
 #    Nothing from this stage survives except the pruned node_modules tree.

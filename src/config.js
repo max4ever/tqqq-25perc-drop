@@ -1,10 +1,10 @@
-import { z } from 'zod';
-
 /**
  * Typed, validated view over the process environment.
  *
- * Everything the app can be tuned with lives here, so the rest of the code
- * never touches `process.env` directly.
+ * Everything the app can be tuned with lives here, so the rest of the code never
+ * touches `process.env` directly. All problems are collected and reported at
+ * once — a container that starts with three bad variables should say so on the
+ * first run, not on the third.
  */
 export class Config {
   #values;
@@ -13,133 +13,85 @@ export class Config {
     this.#values = this.#parse(env);
   }
 
-  #booleanish(defaultValue) {
-    return z
-      .union([z.boolean(), z.string()])
-      .default(defaultValue)
-      .transform((value, ctx) => {
-        if (typeof value === 'boolean') return value;
-
-        const normalised = value.trim().toLowerCase();
-        if (['1', 'true', 'yes', 'y', 'on'].includes(normalised)) return true;
-        if (['0', 'false', 'no', 'n', 'off', ''].includes(normalised)) return false;
-
-        ctx.addIssue({ code: 'custom', message: `expected a boolean-ish value, got "${value}"` });
-        return z.NEVER;
-      });
-  }
-
-  #buildSchema() {
-    return z.object({
-      SYMBOL: z
-        .string()
-        .trim()
-        .min(1)
-        .default('TQQQ')
-        .transform((value) => value.toUpperCase()),
-
-      DROP_THRESHOLD_PERCENT: z.coerce.number().gt(0).lte(100).default(25),
-
-      LOOKBACK_MONTHS: z.coerce.number().int().min(1).max(600).default(6),
-
-      TELEGRAM_URL: z
-        .string({ error: 'TELEGRAM_URL is required — see .env.example' })
-        .trim()
-        .min(1, 'TELEGRAM_URL is required')
-        .refine(
-          (value) => {
-            try {
-              const probe = new URL(value.replaceAll('{message}', 'probe'));
-              return probe.protocol === 'http:' || probe.protocol === 'https:';
-            } catch {
-              return false;
-            }
-          },
-          { message: 'TELEGRAM_URL must be a valid http(s) URL' },
-        ),
-      TELEGRAM_METHOD: z
-        .string()
-        .trim()
-        .toUpperCase()
-        .pipe(z.enum(['GET', 'POST']))
-        .default('GET'),
-      TELEGRAM_MESSAGE_PARAM: z.string().trim().min(1).default('text'),
-      TELEGRAM_TIMEOUT_MS: z.coerce.number().int().min(500).max(120_000).default(10_000),
-      TELEGRAM_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
-
-      // Only has an effect together with STATE_FILE: each run is its own
-      // container, so the cooldown needs somewhere durable to live.
-      ALERT_COOLDOWN_HOURS: z.coerce.number().min(0).max(8760).default(24),
-      STATE_FILE: z.string().trim().min(1).optional(),
-
-      DRY_RUN: this.#booleanish(false),
-      LOG_LEVEL: z
-        .string()
-        .trim()
-        .toLowerCase()
-        .pipe(z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']))
-        .default('info'),
-      LOG_PRETTY: this.#booleanish(false),
-    });
-  }
-
   #parse(env) {
-    // Treat empty strings as "not set" so an empty Railway variable falls back
-    // to the default instead of failing validation.
-    const cleaned = Object.fromEntries(
-      Object.entries(env).filter(([, value]) => typeof value === 'string' && value.trim() !== ''),
-    );
+    const issues = [];
 
-    const result = this.#buildSchema().safeParse(cleaned);
-    if (!result.success) {
-      const details = result.error.issues
-        .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
-        .join('\n');
-      throw new Error(`Invalid configuration:\n${details}`);
+    const values = {
+      symbol: (this.#read(env, 'SYMBOL') ?? 'TQQQ').toUpperCase(),
+      dropThresholdPercent: this.#number(env, 'DROP_THRESHOLD_PERCENT', issues, {
+        fallback: 25,
+        min: 0.01,
+        max: 100,
+      }),
+      lookbackMonths: this.#number(env, 'LOOKBACK_MONTHS', issues, {
+        fallback: 6,
+        min: 1,
+        max: 600,
+        integer: true,
+      }),
+      botToken: this.#botToken(env, issues),
+      chatId: this.#required(env, 'TELEGRAM_CHAT_ID', issues),
+    };
+
+    if (issues.length > 0) {
+      throw new Error(`Invalid configuration:\n${issues.map((i) => `  - ${i}`).join('\n')}`);
     }
-    return result.data;
+    return values;
+  }
+
+  /** Empty variables count as unset, so a blank value falls back to the default. */
+  #read(env, key) {
+    const raw = env[key];
+    return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined;
+  }
+
+  #required(env, key, issues) {
+    const value = this.#read(env, key);
+    if (value === undefined) issues.push(`${key} is required`);
+    return value;
+  }
+
+  #number(env, key, issues, { fallback, min, max, integer = false }) {
+    const raw = this.#read(env, key);
+    if (raw === undefined) return fallback;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      issues.push(`${key} must be a number (got "${raw}")`);
+    } else if (integer && !Number.isInteger(value)) {
+      issues.push(`${key} must be a whole number (got "${raw}")`);
+    } else if (value < min || value > max) {
+      issues.push(`${key} must be between ${min} and ${max} (got ${value})`);
+    } else {
+      return value;
+    }
+    return fallback;
+  }
+
+  #botToken(env, issues) {
+    const value = this.#required(env, 'TELEGRAM_BOT_TOKEN', issues);
+    if (value !== undefined && !/^\d+:\S+$/.test(value)) {
+      // Catches the easy mistake of pasting the bot's numeric id instead of the
+      // whole token, which would otherwise only show up as a 404 from Telegram.
+      issues.push('TELEGRAM_BOT_TOKEN should look like "123456789:AAExample-Token"');
+    }
+    return value;
   }
 
   get symbol() {
-    return this.#values.SYMBOL;
+    return this.#values.symbol;
   }
 
   get dropThresholdPercent() {
-    return this.#values.DROP_THRESHOLD_PERCENT;
+    return this.#values.dropThresholdPercent;
   }
 
   get lookbackMonths() {
-    return this.#values.LOOKBACK_MONTHS;
+    return this.#values.lookbackMonths;
   }
 
   get telegram() {
-    return {
-      url: this.#values.TELEGRAM_URL,
-      method: this.#values.TELEGRAM_METHOD,
-      messageParam: this.#values.TELEGRAM_MESSAGE_PARAM,
-      timeoutMs: this.#values.TELEGRAM_TIMEOUT_MS,
-      retries: this.#values.TELEGRAM_RETRIES,
-    };
-  }
-
-  get alertCooldownHours() {
-    return this.#values.ALERT_COOLDOWN_HOURS;
-  }
-
-  get stateFile() {
-    return this.#values.STATE_FILE;
-  }
-
-  get dryRun() {
-    return this.#values.DRY_RUN;
-  }
-
-  get logLevel() {
-    return this.#values.LOG_LEVEL;
-  }
-
-  get logPretty() {
-    return this.#values.LOG_PRETTY;
+    return { botToken: this.#values.botToken, chatId: this.#values.chatId };
   }
 
   /** Secret-free snapshot, safe to write to the logs on boot. */
@@ -148,11 +100,7 @@ export class Config {
       symbol: this.symbol,
       dropThresholdPercent: this.dropThresholdPercent,
       lookbackMonths: this.lookbackMonths,
-      alertCooldownHours: this.alertCooldownHours,
-      stateFile: this.stateFile ?? null,
-      dryRun: this.dryRun,
-      telegramMethod: this.telegram.method,
-      logLevel: this.logLevel,
+      chatId: this.#values.chatId,
     };
   }
 }

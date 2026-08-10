@@ -5,11 +5,9 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
-README.md
-LICENSE
 Dockerfile
 .dockerignore
-data
+docker-compose.yml
 *.md
 .vscode
 .idea

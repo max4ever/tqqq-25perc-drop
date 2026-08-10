@@ -2,7 +2,7 @@
 /**
  * Build-time sanity check: every module resolves, the config validates and the
  * whole object graph can be constructed. Runs offline — no market data, no
- * webhook call — so it is safe inside `docker build`.
+ * Telegram call — so it is safe inside `docker build`.
  *
  * Its real job is catching an over-eager `prune-modules.mjs` at build time.
  */
@@ -13,16 +13,13 @@ import { DrawdownAnalyzer } from '../src/drawdown-analyzer.js';
 
 const config = new Config({
   SYMBOL: 'TQQQ',
-  TELEGRAM_URL: 'https://example.invalid/send?text={message}',
   DROP_THRESHOLD_PERCENT: '25',
   LOOKBACK_MONTHS: '6',
-  DRY_RUN: 'true',
-  LOG_LEVEL: 'silent',
+  TELEGRAM_BOT_TOKEN: '123456789:AAExample-Token',
+  TELEGRAM_CHAT_ID: '987654321',
 });
 
-
-const logger = createLogger(config);
-new App({ config, logger });
+new App({ config, logger: createLogger(config) });
 
 const analysis = new DrawdownAnalyzer({ thresholdPercent: 25 }).analyze({
   symbol: 'TQQQ',
