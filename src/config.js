@@ -34,7 +34,15 @@ export class Config {
     };
 
     if (issues.length > 0) {
-      throw new Error(`Invalid configuration:\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+      throw new Error(
+        [
+          'Invalid configuration:',
+          ...issues.map((issue) => `  - ${issue}`),
+          '',
+          'Only TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.',
+          'SYMBOL, DROP_THRESHOLD_PERCENT and LOOKBACK_MONTHS default to TQQQ, 25 and 6.',
+        ].join('\n'),
+      );
     }
     return values;
   }

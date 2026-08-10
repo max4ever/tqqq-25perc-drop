@@ -2,4 +2,7 @@
 services:
   stock-drop-alert:
     build: .
-    env_file: .env
+    # Optional: works fine without a .env if the variables are already exported.
+    env_file:
+      - path: .env
+        required: false
