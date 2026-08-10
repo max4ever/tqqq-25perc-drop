@@ -1,10 +1,13 @@
-import { config as loadDotenv } from 'dotenv';
-
 import { App } from './app.js';
 import { Config } from './config.js';
 import { createLogger } from './logger.js';
 
-loadDotenv({ quiet: true });
+try {
+  // Node's own .env loader. Real environment variables still take precedence.
+  process.loadEnvFile();
+} catch {
+  // No .env file, which is the normal case in a container.
+}
 
 let config;
 try {
