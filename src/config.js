@@ -31,6 +31,7 @@ export class Config {
       }),
       botToken: this.#botToken(env, issues),
       chatId: this.#required(env, 'TELEGRAM_CHAT_ID', issues),
+      forceNotify: this.#boolean(env, 'FORCE_NOTIFY', issues),
     };
 
     if (issues.length > 0) {
@@ -76,6 +77,18 @@ export class Config {
     return fallback;
   }
 
+  #boolean(env, key, issues) {
+    const raw = this.#read(env, key);
+    if (raw === undefined) return false;
+
+    const normalised = raw.toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(normalised)) return true;
+    if (['0', 'false', 'no', 'n', 'off'].includes(normalised)) return false;
+
+    issues.push(`${key} must be true or false (got "${raw}")`);
+    return false;
+  }
+
   #botToken(env, issues) {
     const value = this.#required(env, 'TELEGRAM_BOT_TOKEN', issues);
     if (value !== undefined && !/^\d+:\S+$/.test(value)) {
@@ -102,6 +115,11 @@ export class Config {
     return { botToken: this.#values.botToken, chatId: this.#values.chatId };
   }
 
+  /** Send the message even when the threshold was not reached, to test delivery. */
+  get forceNotify() {
+    return this.#values.forceNotify;
+  }
+
   /** Secret-free snapshot, safe to write to the logs on boot. */
   describe() {
     return {
@@ -109,6 +127,7 @@ export class Config {
       dropThresholdPercent: this.dropThresholdPercent,
       lookbackMonths: this.lookbackMonths,
       chatId: this.#values.chatId,
+      forceNotify: this.forceNotify,
     };
   }
 }

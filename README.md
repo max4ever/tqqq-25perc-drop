@@ -78,6 +78,7 @@ broken one:
 | `LOOKBACK_MONTHS` | `6` | Length of the "highest high" window |
 | `TELEGRAM_BOT_TOKEN` | **required** | From @BotFather, including the part before the colon |
 | `TELEGRAM_CHAT_ID` | **required** | Negative for groups, `@name` for channels |
+| `FORCE_NOTIFY` | `false` | Send the message even when the threshold was not reached |
 
 Read from the environment, or from a `.env` file when one is present — see
 [.env.example](.env.example).
@@ -91,6 +92,29 @@ Read from the environment, or from a `.env` file when one is present — see
 
 The token is treated as a secret: it is never written to the logs, so a leaked
 log line can't be replayed.
+
+### Checking that Telegram actually works
+
+`FORCE_NOTIFY=true` runs the normal check but sends the message whatever the
+outcome, so you can confirm the bot reaches you without waiting for a real crash:
+
+```bash
+docker run --rm --env-file .env -e FORCE_NOTIFY=true stock-drop-alert
+```
+
+The message says so itself, so a test can never be mistaken for the real thing:
+
+```
+🧪 Test message — no alert. TQQQ (ProShares UltraPro QQQ) is 15.7% below its
+6-month high, which has not reached the threshold.
+
+Threshold: -25%
+High:      88.09 USD on 2026-06-03
+Now:       74.26 USD (2026-08-10)
+Window:    2026-02-10 → 2026-08-10
+```
+
+Leave it off in normal operation — it messages you on every single run.
 
 ### Stateless, so it repeats itself
 

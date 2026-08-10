@@ -23,7 +23,7 @@ export class App {
   async run() {
     this.#logger.info({ config: this.#config.describe() }, 'starting stock-drop-alert');
     const result = await this.#watcher.check();
-    this.#logger.info({ triggered: result.triggered }, 'check complete');
+    this.#logger.info({ triggered: result.triggered, notified: result.notified }, 'check complete');
     return result;
   }
 
@@ -39,6 +39,7 @@ export class App {
       }),
       analyzer: new DrawdownAnalyzer({ thresholdPercent: config.dropThresholdPercent }),
       notifier: new TelegramNotifier({ ...config.telegram, logger: this.#logger }),
+      forceNotify: config.forceNotify,
       logger: this.#logger,
     });
   }
