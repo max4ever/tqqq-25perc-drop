@@ -9,12 +9,10 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "once": "RUN_MODE=once node src/index.js",
-    "dev": "LOG_PRETTY=true RUN_MODE=once node src/index.js",
-    "dry-run": "LOG_PRETTY=true RUN_MODE=once DRY_RUN=true node src/index.js"
+    "dev": "LOG_PRETTY=true node src/index.js",
+    "dry-run": "LOG_PRETTY=true DRY_RUN=true node src/index.js"
   },
   "dependencies": {
-    "croner": "^10.0.1",
     "dotenv": "^17.4.2",
     "pino": "^10.3.1",
     "yahoo-finance2": "^4.0.2",

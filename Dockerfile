@@ -23,8 +23,7 @@ RUN node scripts/smoke-test.mjs
 FROM node:24-alpine AS runtime
 
 ENV NODE_ENV=production \
-    NPM_CONFIG_UPDATE_NOTIFIER=false \
-    PORT=3000
+    NPM_CONFIG_UPDATE_NOTIFIER=false
 
 # npm/corepack are ~20 MB and are never used: the entrypoint calls node directly.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
@@ -37,9 +36,6 @@ COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 
 USER node
-EXPOSE 3000
 
-HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-
+# Runs one check and exits: 0 = checked, 1 = failed, 78 = bad configuration.
 CMD ["node", "src/index.js"]

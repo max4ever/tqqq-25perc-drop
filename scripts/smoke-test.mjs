@@ -20,6 +20,7 @@ const config = new Config({
   LOG_LEVEL: 'silent',
 });
 
+
 const logger = createLogger(config);
 new App({ config, logger });
 

@@ -67,21 +67,10 @@ export class Config {
       TELEGRAM_TIMEOUT_MS: z.coerce.number().int().min(500).max(120_000).default(10_000),
       TELEGRAM_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
 
-      RUN_MODE: z
-        .string()
-        .trim()
-        .toLowerCase()
-        .pipe(z.enum(['once', 'schedule']))
-        .default('schedule'),
-      CHECK_CRON: z.string().trim().min(1).default('0 * * * *'),
-      CRON_TIMEZONE: z.string().trim().min(1).default('UTC'),
-      RUN_ON_START: this.#booleanish(true),
-
+      // Only has an effect together with STATE_FILE: each run is its own
+      // container, so the cooldown needs somewhere durable to live.
       ALERT_COOLDOWN_HOURS: z.coerce.number().min(0).max(8760).default(24),
       STATE_FILE: z.string().trim().min(1).optional(),
-
-      HEALTH_SERVER: this.#booleanish(true),
-      PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
 
       DRY_RUN: this.#booleanish(false),
       LOG_LEVEL: z
@@ -133,36 +122,12 @@ export class Config {
     };
   }
 
-  get runMode() {
-    return this.#values.RUN_MODE;
-  }
-
-  get checkCron() {
-    return this.#values.CHECK_CRON;
-  }
-
-  get cronTimezone() {
-    return this.#values.CRON_TIMEZONE;
-  }
-
-  get runOnStart() {
-    return this.#values.RUN_ON_START;
-  }
-
   get alertCooldownHours() {
     return this.#values.ALERT_COOLDOWN_HOURS;
   }
 
   get stateFile() {
     return this.#values.STATE_FILE;
-  }
-
-  get healthServerEnabled() {
-    return this.#values.HEALTH_SERVER;
-  }
-
-  get port() {
-    return this.#values.PORT;
   }
 
   get dryRun() {
@@ -183,14 +148,8 @@ export class Config {
       symbol: this.symbol,
       dropThresholdPercent: this.dropThresholdPercent,
       lookbackMonths: this.lookbackMonths,
-      runMode: this.runMode,
-      checkCron: this.checkCron,
-      cronTimezone: this.cronTimezone,
-      runOnStart: this.runOnStart,
       alertCooldownHours: this.alertCooldownHours,
       stateFile: this.stateFile ?? null,
-      healthServer: this.healthServerEnabled,
-      port: this.port,
       dryRun: this.dryRun,
       telegramMethod: this.telegram.method,
       logLevel: this.logLevel,

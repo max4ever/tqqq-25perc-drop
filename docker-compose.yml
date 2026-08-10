@@ -1,14 +1,11 @@
 # Local convenience only — Railway builds the Dockerfile directly.
-#   docker compose up --build
+#   docker compose run --rm stock-drop-alert
 services:
   stock-drop-alert:
     build: .
     env_file: .env
-    ports:
-      - '3000:3000'
     volumes:
       - alert-state:/data
-    restart: unless-stopped
 
 volumes:
   alert-state:

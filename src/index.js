@@ -27,16 +27,9 @@ process.on('uncaughtException', (error) => {
 });
 
 try {
-  await new App({ config, logger }).start();
-  if (config.runMode === 'once') {
-    logger.info('single run complete');
-    process.exit(0);
-  }
+  await new App({ config, logger }).run();
+  process.exit(0);
 } catch (error) {
-  if (error?.alreadyLogged) {
-    logger.error('exiting after a failed check');
-  } else {
-    logger.fatal({ err: error }, 'fatal error');
-  }
+  logger.fatal({ err: error }, 'check failed');
   process.exit(1);
 }
