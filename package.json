@@ -1,0 +1,26 @@
+{
+  "name": "stock-drop-alert",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Watches a stock symbol and pings a Telegram webhook when it drops X% from its highest high over the last N months.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "RUN_MODE=once node src/index.js",
+    "dev": "LOG_PRETTY=true RUN_MODE=once node src/index.js",
+    "dry-run": "LOG_PRETTY=true RUN_MODE=once DRY_RUN=true node src/index.js"
+  },
+  "dependencies": {
+    "croner": "^10.0.1",
+    "dotenv": "^17.4.2",
+    "pino": "^10.3.1",
+    "yahoo-finance2": "^4.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.1.3"
+  }
+}
