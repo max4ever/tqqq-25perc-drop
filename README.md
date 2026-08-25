@@ -1,7 +1,8 @@
 # stock-drop-alert
 
 Checks whether a stock symbol has fallen **at least X% below its highest high
-over the last N months**, and sends you a Telegram message if it has.
+over the last N months**, and sends you a Telegram message if it has. Once a
+month it also messages you when it hasn't, so you know it is still watching.
 
 Defaults to the question that started it: *has TQQQ dropped 25% from its
 six-month high?* Any Yahoo Finance symbol works — `AAPL`, `BTC-USD`, `ASML.AS`,
@@ -27,7 +28,8 @@ Window:    2026-02-10 → 2026-08-10
 2. Take the **highest intraday high** in that window — the peak.
 3. Compare it to the current price (live quote, falling back to the last close).
 4. `drop% = (peak − current) / peak × 100`. If that is `>= DROP_THRESHOLD_PERCENT`,
-   send the message.
+   send the message. If it isn't, send [the monthly digest](#the-monthly-digest)
+   instead — but only on digest day.
 
 Whether it fired or not, the verdict lands in the logs:
 
@@ -78,6 +80,8 @@ broken one:
 | `LOOKBACK_MONTHS` | `6` | Length of the "highest high" window |
 | `TELEGRAM_BOT_TOKEN` | **required** | From @BotFather, including the part before the colon |
 | `TELEGRAM_CHAT_ID` | **required** | Negative for groups, `@name` for channels |
+| `MONTHLY_DIGEST` | `true` | Send a quiet-month summary on `MONTHLY_DIGEST_DAY` |
+| `MONTHLY_DIGEST_DAY` | `1` | Day of the month (1–31) the digest lands on, in the container's timezone |
 | `FORCE_NOTIFY` | `false` | Send the message even when the threshold was not reached |
 
 Read from the environment, or from a `.env` file when one is present — see
@@ -92,6 +96,41 @@ Read from the environment, or from a `.env` file when one is present — see
 
 The token is treated as a secret: it is never written to the logs, so a leaked
 log line can't be replayed.
+
+### The monthly digest
+
+Most months the answer is "no, it hasn't dropped", and a job that only speaks up
+on bad news is indistinguishable from a job that has quietly died. So once a
+month — on the 1st by default — a check that finds nothing still messages you:
+
+```
+🗓 Monthly digest — TQQQ (ProShares UltraPro QQQ)
+
+No alert. 15.7% below its 6-month high, and the threshold is 25%.
+
+Now:       74.26 USD (2026-08-10)
+Month:     -2.39%
+High:      88.09 USD on 2026-06-03
+Alert at:  66.07 USD, another 9.3% down
+Window:    2026-02-10 → 2026-08-10
+```
+
+`Month` is the move since the same date a month ago, and `Alert at` is the price
+that would fire the alert — so the digest doubles as a standing answer to "how
+far off is it?".
+
+You get at most one message per run. A real alert replaces the digest rather
+than arriving alongside it, and `FORCE_NOTIFY` outranks both, so a delivery test
+can never be mistaken for the monthly report.
+
+Move it with `MONTHLY_DIGEST_DAY=15`, or turn it off with `MONTHLY_DIGEST=false`.
+A day the month is too short for means that month's last day, so
+`MONTHLY_DIGEST_DAY=31` reads as "end of month" and still fires in February. The
+day starts in the container's timezone, which is UTC unless you set `TZ`:
+
+```bash
+docker run --rm --env-file .env -e TZ=Europe/Amsterdam -e MONTHLY_DIGEST_DAY=31 stock-drop-alert
+```
 
 ### Checking that Telegram actually works
 
@@ -121,3 +160,7 @@ Leave it off in normal operation — it messages you on every single run.
 There is nothing remembering that it already told you. Every run that finds the
 symbol below the threshold sends a message — fine on a daily schedule, chatty on
 an hourly one.
+
+The digest counts days, not messages, for the same reason: it fires on every run
+that happens to fall on its day of the month. Run the check once a day and that
+is one digest a month, as intended; run it hourly and the 1st brings 24 of them.

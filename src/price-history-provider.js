@@ -1,3 +1,5 @@
+import { Calendar } from './calendar.js';
+
 /**
  * Thin wrapper around the Yahoo Finance chart endpoint.
  *
@@ -19,7 +21,7 @@ export class PriceHistoryProvider {
    */
   async fetchWindow(symbol, months) {
     const end = new Date();
-    const start = this.#subtractMonths(end, months);
+    const start = Calendar.subtractMonths(end, months);
 
     this.#logger.debug(
       { from: start.toISOString(), to: end.toISOString(), months },
@@ -84,21 +86,5 @@ export class PriceHistoryProvider {
       if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
     }
     return null;
-  }
-
-  /** Month-safe date maths: 31 March minus 1 month is 28/29 February, not 3 March. */
-  #subtractMonths(date, months) {
-    const dayOfMonth = date.getDate();
-    const shifted = new Date(date.getTime());
-    shifted.setDate(1);
-    shifted.setMonth(shifted.getMonth() - months);
-
-    const daysInTargetMonth = new Date(
-      shifted.getFullYear(),
-      shifted.getMonth() + 1,
-      0,
-    ).getDate();
-    shifted.setDate(Math.min(dayOfMonth, daysInTargetMonth));
-    return shifted;
   }
 }

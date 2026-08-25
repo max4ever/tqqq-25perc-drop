@@ -1,3 +1,5 @@
+import { Calendar } from './calendar.js';
+
 /**
  * Turns a price window into a drawdown verdict: how far the current price sits
  * below the highest high of the window, and whether that clears the threshold.
@@ -25,6 +27,7 @@ export class DrawdownAnalyzer {
       currentPrice: this.#round(currentPrice),
       currentPriceAsOf: window.currentPriceAsOf,
       dropPercent: this.#round(dropPercent),
+      monthChangePercent: this.#monthChangePercent(window.candles, currentPrice),
       thresholdPercent: this.#thresholdPercent,
       remainingToThresholdPercent: this.#round(Math.max(0, this.#thresholdPercent - dropPercent)),
       priceAtThreshold: this.#round(peak.high * (1 - this.#thresholdPercent / 100)),
@@ -33,6 +36,20 @@ export class DrawdownAnalyzer {
       candleCount: window.candles.length,
       triggered,
     };
+  }
+
+  /**
+   * How the price moved over the last calendar month, measured against the
+   * newest candle that is already a month old — so a weekend or a bank holiday
+   * shifts the comparison to the previous trading day instead of losing it.
+   *
+   * @returns {number|null} null when the window is shorter than a month
+   */
+  #monthChangePercent(candles, currentPrice) {
+    const aMonthBefore = Calendar.subtractMonths(candles.at(-1).date, 1).getTime();
+    const reference = candles.findLast((candle) => candle.date.getTime() <= aMonthBefore);
+    if (!reference || !(reference.close > 0)) return null;
+    return this.#round(((currentPrice - reference.close) / reference.close) * 100);
   }
 
   #findPeak(candles) {

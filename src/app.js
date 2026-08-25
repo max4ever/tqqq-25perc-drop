@@ -2,6 +2,7 @@ import YahooFinance from 'yahoo-finance2';
 
 import { DrawdownAnalyzer } from './drawdown-analyzer.js';
 import { DropWatcher } from './drop-watcher.js';
+import { MessageComposer } from './message-composer.js';
 import { PriceHistoryProvider } from './price-history-provider.js';
 import { TelegramNotifier } from './telegram-notifier.js';
 
@@ -23,7 +24,10 @@ export class App {
   async run() {
     this.#logger.info({ config: this.#config.describe() }, 'starting stock-drop-alert');
     const result = await this.#watcher.check();
-    this.#logger.info({ triggered: result.triggered, notified: result.notified }, 'check complete');
+    this.#logger.info(
+      { triggered: result.triggered, notified: result.notified, messageKind: result.messageKind },
+      'check complete',
+    );
     return result;
   }
 
@@ -38,8 +42,10 @@ export class App {
         logger: this.#logger,
       }),
       analyzer: new DrawdownAnalyzer({ thresholdPercent: config.dropThresholdPercent }),
+      composer: new MessageComposer({ lookbackMonths: config.lookbackMonths }),
       notifier: new TelegramNotifier({ ...config.telegram, logger: this.#logger }),
       forceNotify: config.forceNotify,
+      monthlyDigest: config.monthlyDigest,
       logger: this.#logger,
     });
   }

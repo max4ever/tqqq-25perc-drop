@@ -24,6 +24,8 @@ export class Config {
         botToken: this.#botToken(from),
         chatId: from.get('TELEGRAM_CHAT_ID').required().asString(),
         forceNotify: from.get('FORCE_NOTIFY').default('false').asBool(),
+        monthlyDigest: from.get('MONTHLY_DIGEST').default('true').asBool(),
+        monthlyDigestDay: this.#digestDay(from),
       };
     } catch (error) {
       throw new Error(
@@ -38,6 +40,18 @@ export class Config {
     const value = from.get('DROP_THRESHOLD_PERCENT').default(25).asFloatPositive();
     if (value > 100) throw new Error('env-var: "DROP_THRESHOLD_PERCENT" must be 100 or less');
     return value;
+  }
+
+  /**
+   * A day no month has could never fire, so it is refused rather than ignored.
+   * `asIntPositive` lets 0 through, and 0 would silently never match a date.
+   */
+  #digestDay(from) {
+    const day = from.get('MONTHLY_DIGEST_DAY').default(1).asIntPositive();
+    if (day < 1 || day > 31) {
+      throw new Error('env-var: "MONTHLY_DIGEST_DAY" must be between 1 and 31');
+    }
+    return day;
   }
 
   #botToken(from) {
@@ -71,6 +85,14 @@ export class Config {
     return this.#values.forceNotify;
   }
 
+  /** The quiet-month report: on which day of the month to say nothing has happened. */
+  get monthlyDigest() {
+    return {
+      enabled: this.#values.monthlyDigest,
+      dayOfMonth: this.#values.monthlyDigestDay,
+    };
+  }
+
   /** Secret-free snapshot, safe to write to the logs on boot. */
   describe() {
     return {
@@ -79,6 +101,8 @@ export class Config {
       lookbackMonths: this.lookbackMonths,
       chatId: this.#values.chatId,
       forceNotify: this.forceNotify,
+      monthlyDigest: this.#values.monthlyDigest,
+      monthlyDigestDay: this.#values.monthlyDigestDay,
     };
   }
 }
