@@ -29,7 +29,7 @@ Window:    2026-02-10 → 2026-08-10
 3. Compare it to the current price (live quote, falling back to the last close).
 4. `drop% = (peak − current) / peak × 100`. If that is `>= DROP_THRESHOLD_PERCENT`,
    send the message. If it isn't, send [the monthly digest](#the-monthly-digest)
-   instead — but only on digest day.
+   instead — but only on the first weekday of the month.
 
 Whether it fired or not, the verdict lands in the logs:
 
@@ -80,8 +80,7 @@ broken one:
 | `LOOKBACK_MONTHS` | `6` | Length of the "highest high" window |
 | `TELEGRAM_BOT_TOKEN` | **required** | From @BotFather, including the part before the colon |
 | `TELEGRAM_CHAT_ID` | **required** | Negative for groups, `@name` for channels |
-| `MONTHLY_DIGEST` | `true` | Send a quiet-month summary on `MONTHLY_DIGEST_DAY` |
-| `MONTHLY_DIGEST_DAY` | `1` | Day of the month (1–31) the digest lands on, in the container's timezone |
+| `MONTHLY_DIGEST` | `true` | Send a quiet-month summary on the first weekday of each month |
 | `FORCE_NOTIFY` | `false` | Send the message even when the threshold was not reached |
 
 Read from the environment, or from a `.env` file when one is present — see
@@ -100,8 +99,8 @@ log line can't be replayed.
 ### The monthly digest
 
 Most months the answer is "no, it hasn't dropped", and a job that only speaks up
-on bad news is indistinguishable from a job that has quietly died. So once a
-month — on the 1st by default — a check that finds nothing still messages you:
+on bad news is indistinguishable from a job that has quietly died. So on the
+first weekday of each month, a check that finds nothing still messages you:
 
 ```
 🗓 Monthly digest — TQQQ (ProShares UltraPro QQQ)
@@ -123,14 +122,8 @@ You get at most one message per run. A real alert replaces the digest rather
 than arriving alongside it, and `FORCE_NOTIFY` outranks both, so a delivery test
 can never be mistaken for the monthly report.
 
-Move it with `MONTHLY_DIGEST_DAY=15`, or turn it off with `MONTHLY_DIGEST=false`.
-A day the month is too short for means that month's last day, so
-`MONTHLY_DIGEST_DAY=31` reads as "end of month" and still fires in February. The
-day starts in the container's timezone, which is UTC unless you set `TZ`:
-
-```bash
-docker run --rm --env-file .env -e TZ=Europe/Amsterdam -e MONTHLY_DIGEST_DAY=31 stock-drop-alert
-```
+It goes out on a weekday rather than the 1st, so a schedule that skips weekends
+never misses a month. Turn it off with `MONTHLY_DIGEST=false`.
 
 ### Checking that Telegram actually works
 
@@ -162,5 +155,6 @@ symbol below the threshold sends a message — fine on a daily schedule, chatty 
 an hourly one.
 
 The digest counts days, not messages, for the same reason: it fires on every run
-that happens to fall on its day of the month. Run the check once a day and that
-is one digest a month, as intended; run it hourly and the 1st brings 24 of them.
+that happens to fall on the first weekday of the month. Run the check once a
+day, or once every weekday, and that is one digest a month, as intended; run it
+hourly and that day brings 24 of them.

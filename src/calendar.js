@@ -10,6 +10,11 @@ export class Calendar {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   }
 
+  static isWeekend(date) {
+    const weekday = date.getDay();
+    return weekday === 0 || weekday === 6;
+  }
+
   /** 31 March minus 1 month is 28/29 February, not 3 March. */
   static subtractMonths(date, months) {
     const dayOfMonth = date.getDate();

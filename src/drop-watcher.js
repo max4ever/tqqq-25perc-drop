@@ -85,10 +85,7 @@ export class DropWatcher {
     }
 
     if (this.#isDigestDay()) {
-      this.#logger.info(
-        { dayOfMonth: this.#monthlyDigest.dayOfMonth },
-        'digest day — sending the monthly digest',
-      );
+      this.#logger.info('first weekday of the month — sending the monthly digest');
       return 'digest';
     }
 
@@ -96,18 +93,15 @@ export class DropWatcher {
   }
 
   /**
-   * True on the configured day of the month, in the container's own timezone
-   * (set `TZ` to move it). With nothing remembering the last digest, the
-   * schedule decides how often this lands: once a month on a daily run, once
-   * per run on that day if the job runs more often than that.
+   * True on the first Monday-to-Friday of the month, so a schedule that skips
+   * weekends never misses one and a daily schedule still sends only one.
    */
   #isDigestDay() {
-    if (!this.#monthlyDigest.enabled) return false;
+    if (!this.#monthlyDigest) return false;
 
     const today = this.#now();
-    // A day the month is too short for means its last day, so asking for the
-    // 31st still gets you a February digest rather than silent nothing.
-    const digestDay = Math.min(this.#monthlyDigest.dayOfMonth, Calendar.daysInMonth(today));
-    return today.getDate() === digestDay;
+    if (Calendar.isWeekend(today)) return false;
+    // When the 1st is a Saturday or Sunday, the first weekday is the Monday after.
+    return today.getDate() === 1 || (today.getDay() === 1 && today.getDate() <= 3);
   }
 }
