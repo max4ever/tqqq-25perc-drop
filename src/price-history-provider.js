@@ -72,7 +72,9 @@ export class PriceHistoryProvider {
         const date = candle.date instanceof Date ? candle.date : new Date(candle.date);
         const high = this.#firstFiniteNumber([candle.high, candle.close, candle.open]);
         const close = this.#firstFiniteNumber([candle.close, candle.high, candle.open]);
-        return { date, high, close };
+        // A missing or zero low would read as a 100% drop, so fall back to the close.
+        const low = candle.low > 0 ? candle.low : close;
+        return { date, high, low, close };
       })
       .filter(
         (candle) =>

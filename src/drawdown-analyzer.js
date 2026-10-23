@@ -1,8 +1,11 @@
 import { Calendar } from './calendar.js';
 
 /**
- * Turns a price window into a drawdown verdict: how far the current price sits
- * below the highest high of the window, and whether that clears the threshold.
+ * Turns a price window into a drawdown verdict: how far the price sits below
+ * the highest high of the window, and whether that clears the threshold.
+ *
+ * The verdict goes by the day's lowest price rather than the price at the
+ * moment of the check, so a dip that recovers before the check still counts.
  */
 export class DrawdownAnalyzer {
   #thresholdPercent;
@@ -14,9 +17,14 @@ export class DrawdownAnalyzer {
   /** @param {object} window as returned by PriceHistoryProvider#fetchWindow */
   analyze(window) {
     const peak = this.#findPeak(window.candles);
+    const latest = window.candles.at(-1);
     const currentPrice = window.currentPrice;
-    const dropPercent = ((peak.high - currentPrice) / peak.high) * 100;
-    const triggered = dropPercent >= this.#thresholdPercent;
+    // A daily candle cannot say whether its low came before or after its high,
+    // so on the day of the peak itself only the current price counts.
+    const dayLow = latest === peak ? currentPrice : Math.min(latest.low, currentPrice);
+    const dropPercent = this.#dropFrom(peak.high, currentPrice);
+    const dayLowDropPercent = this.#dropFrom(peak.high, dayLow);
+    const triggered = dayLowDropPercent >= this.#thresholdPercent;
 
     return {
       symbol: window.symbol,
@@ -27,6 +35,9 @@ export class DrawdownAnalyzer {
       currentPrice: this.#round(currentPrice),
       currentPriceAsOf: window.currentPriceAsOf,
       dropPercent: this.#round(dropPercent),
+      dayLow: this.#round(dayLow),
+      dayLowDate: latest.date,
+      dayLowDropPercent: this.#round(dayLowDropPercent),
       monthChangePercent: this.#monthChangePercent(window.candles, currentPrice),
       thresholdPercent: this.#thresholdPercent,
       remainingToThresholdPercent: this.#round(Math.max(0, this.#thresholdPercent - dropPercent)),
@@ -50,6 +61,10 @@ export class DrawdownAnalyzer {
     const reference = candles.findLast((candle) => candle.date.getTime() <= aMonthBefore);
     if (!reference || !(reference.close > 0)) return null;
     return this.#round(((currentPrice - reference.close) / reference.close) * 100);
+  }
+
+  #dropFrom(peak, price) {
+    return ((peak - price) / peak) * 100;
   }
 
   #findPeak(candles) {

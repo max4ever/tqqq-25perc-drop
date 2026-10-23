@@ -52,14 +52,16 @@ export class DropWatcher {
         peakDate: analysis.peakDate,
         currentPrice: analysis.currentPrice,
         dropPercent: analysis.dropPercent,
+        dayLow: analysis.dayLow,
+        dayLowDropPercent: analysis.dayLowDropPercent,
         monthChangePercent: analysis.monthChangePercent,
         thresholdPercent: analysis.thresholdPercent,
         triggered: analysis.triggered,
         candles: analysis.candleCount,
       },
-      analysis.triggered
-        ? `${analysis.symbol} is ${analysis.dropPercent}% below its ${this.#lookbackMonths}-month high — threshold reached`
-        : `${analysis.symbol} is ${analysis.dropPercent}% below its ${this.#lookbackMonths}-month high — below threshold`,
+      `${analysis.symbol} is ${analysis.dropPercent}% below its ${this.#lookbackMonths}-month high, ` +
+        `${analysis.dayLowDropPercent}% at the day's low — ` +
+        (analysis.triggered ? 'threshold reached' : 'below threshold'),
     );
 
     const kind = this.#decide(analysis);

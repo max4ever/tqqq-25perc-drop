@@ -16,7 +16,8 @@ exits. Scheduling it is somebody else's job.
 
 Threshold: -25%
 High:      88.09 USD on 2026-06-03
-Now:       63.95 USD (2026-08-10)
+Low:       63.95 USD on 2026-08-10, -27.4%
+Now:       67.20 USD (2026-08-10), -23.71%
 Window:    2026-02-10 → 2026-08-10
 ```
 
@@ -26,17 +27,24 @@ Window:    2026-02-10 → 2026-08-10
 
 1. Pull daily candles for `SYMBOL` covering the last `LOOKBACK_MONTHS` months.
 2. Take the **highest intraday high** in that window — the peak.
-3. Compare it to the current price (live quote, falling back to the last close).
-4. `drop% = (peak − current) / peak × 100`. If that is `>= DROP_THRESHOLD_PERCENT`,
+3. Take the **day's lowest price** — today's intraday low, or the live quote if
+   that is lower.
+4. `drop% = (peak − low) / peak × 100`. If that is `>= DROP_THRESHOLD_PERCENT`,
    send the message. If it isn't, send [the monthly digest](#the-monthly-digest)
    instead — but only on the first weekday of the month.
+
+Going by the low means a dip past the threshold still fires even if the price
+has recovered by the time the check runs; the message shows both. Schedule the
+check after the market closes, so the day's low is final — see
+[On Railway](#on-railway) for a time that works all year round.
 
 Whether it fired or not, the verdict lands in the logs:
 
 ```json
 {"level":"info","peakPrice":88.09,"peakDate":"2026-06-03T13:30:00.000Z",
- "currentPrice":74.26,"dropPercent":15.7,"thresholdPercent":25,"triggered":false,
- "msg":"TQQQ is 15.7% below its 6-month high — below threshold"}
+ "currentPrice":74.26,"dropPercent":15.7,"dayLow":73.1,"dayLowDropPercent":17.02,
+ "thresholdPercent":25,"triggered":false,
+ "msg":"TQQQ is 15.7% below its 6-month high, 17.02% at the day's low — below threshold"}
 ```
 
 ---
@@ -68,6 +76,26 @@ broken one:
 | `0` | Checked — message sent, or threshold not reached |
 | `1` | Yahoo unreachable, or Telegram refused the message |
 | `78` | Bad configuration, with the offending variables named |
+
+### On Railway
+
+[railway.json](railway.json) builds the Dockerfile and runs the check at
+**21:30 UTC, Monday to Friday** (`30 21 * * 1-5`). Railway only takes schedules
+in UTC, so the time is chosen to land after the New York close whether or not
+the US is on daylight saving time:
+
+| | New York close | Check runs (New York time) |
+| --- | --- | --- |
+| Summer (EDT) | 20:00 UTC | 17:30 |
+| Winter (EST) | 21:00 UTC | 16:30 |
+
+Either way the day's low is final and the weekday is the same as in New York.
+Elsewhere the local time of the message shifts by an hour when clocks change,
+but the check never moves before the close. Railway can start a run a few
+minutes late, which the half-hour margin absorbs.
+
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as service variables. The
+schedule in `railway.json` overrides whatever the dashboard says.
 
 ---
 
@@ -150,9 +178,9 @@ Leave it off in normal operation — it messages you on every single run.
 
 ### Stateless, so it repeats itself
 
-There is nothing remembering that it already told you. Every run that finds the
-symbol below the threshold sends a message — fine on a daily schedule, chatty on
-an hourly one.
+There is nothing remembering that it already told you. Every run whose day dipped
+past the threshold sends a message — fine on a daily schedule, chatty on an
+hourly one.
 
 The digest counts days, not messages, for the same reason: it fires on every run
 that happens to fall on the first weekday of the month. Run the check once a

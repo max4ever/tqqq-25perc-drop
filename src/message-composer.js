@@ -25,13 +25,15 @@ export class MessageComposer {
     }
   }
 
+  /** Leads with the day's low, which is what fired it; `Now` shows any recovery since. */
   #alert(analysis) {
     return this.#lines([
-      `📉 ${this.#title(analysis)} dropped ${analysis.dropPercent}% from its ${this.#lookbackMonths}-month high.`,
+      `📉 ${this.#title(analysis)} dropped ${analysis.dayLowDropPercent}% from its ${this.#lookbackMonths}-month high.`,
       '',
       `Threshold: -${analysis.thresholdPercent}%`,
       this.#high(analysis),
-      this.#now(analysis),
+      `Low:       ${this.#money(analysis, analysis.dayLow)} on ${this.#date(analysis.dayLowDate)}, -${analysis.dayLowDropPercent}%`,
+      `${this.#now(analysis)}, -${analysis.dropPercent}%`,
       this.#window(analysis),
     ]);
   }
